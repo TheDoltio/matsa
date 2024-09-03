@@ -9,6 +9,9 @@
 
 using namespace std;
 
+const string input = "master_file200824.dat";
+const string output = "per_min_ctn.dat";
+
 // Esta función traduce valores de hexadecimal a decimal, así tenemos un archivo de entrega ya procesado.
 int hex_to_dec(string hex) {
     int dec = 0;
@@ -69,7 +72,7 @@ string flujo(string line) {
     istringstream stream(line);
     string token;
     vector<string> cuentas;
-    int columna = 0;
+    long long columna = 0;
     while (stream >> token) {
         if (columna >= 1 && columna <= 5) {
             cuentas.push_back(token);
@@ -119,7 +122,7 @@ void log(bool success) {
 }
 
 // Esta es la función principal que buscará y traducirá los datos continuamente.      
-void proceso_busqueda(const string& input, const string& output) {
+/*void proceso_busqueda(const string& input, const string& output) {
 
     static long long ult_linea = 0;
     ifstream in(input);
@@ -162,11 +165,69 @@ void proceso_busqueda(const string& input, const string& output) {
      out.close();
      
      log(datos_leidos); 
+}*/
+void proceso_busqueda(const string& input, const string& output) {
+    static long long ult_linea = 0;
+    string linea;
+    vector<string> lineas;
+    long long linea_actual = ult_linea;
+    bool datos_leidos = false;
+
+    ifstream in(input);
+    if (!in) {
+        cerr << "\033[1m\033[31mNo se pudo abrir el archivo de entrada.\033[0m" << "\n";
+        return;
+    }
+
+    in.seekg(ult_linea, ios::beg);
+    if (in.fail()) {
+        cerr << "\033[1m\033[31mError al mover el puntero de lectura.\033[0m" << "\n";
+        in.clear(); // Restablecer las banderas de error
+        in.close();
+        return;
+    }
+
+    while (getline(in, linea)) {
+        linea_actual = in.tellg();
+        if (linea_actual == -1) {
+            cerr << "\033[1m\033[31mError al obtener la posición del puntero de lectura.\033[0m" << "\n";
+            break; // Salir del bucle si ocurre un error
+        }
+        lineas.push_back(linea);
+    }
+    in.close(); // Cerrar el archivo después de leer
+
+    ofstream out(output, ios::app);
+    if (!out) {
+        cerr << "\033[1m\033[31mNo se pudo abrir el archivo de salida.\033[0m" << "\n";
+        return;
+    }
+
+    for (size_t i = 0; i < lineas.size(); ++i) {
+        if (lineas[i].rfind("DS", 0) == 0) {
+            string datos = flujo(lineas[i]);
+            string fechas;
+            if (i >= 2) {
+                fechas = tiempo(lineas[i - 2]);
+            }
+            if (!fechas.empty()) {
+                out << fechas << " " << datos << "\n";
+                datos_leidos = true;
+            }
+        }
+    }
+
+    out.close(); // Cerrar el archivo de salida después de escribir
+
+    // Solo actualizar `ult_linea` si no hubo errores
+    if (linea_actual != -1) {
+        ult_linea = linea_actual;
+    }
+
+    log(datos_leidos);
 }
 
 int main() {
-    const string input = "master_file200824.dat";
-    const string output = "per_min_ctn.dat";
     
     cout << "\033[1m\033[35mIniciando la recolección y traducción de datos de flujo\033[0m\n\n";
     
