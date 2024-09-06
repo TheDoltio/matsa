@@ -69,15 +69,16 @@ while true; do
     if mountpoint -q "/media/escaramujo/ADATA UFD"; then
         echo -e "\e[1m\e[32mDispositivo de respaldo montado, procediendo...\e[0m"
     else
-        echo -e "\e[1m\e[31mDispositivo de respaldo no montado, esperando 5 minutos...\e[0m"
-        sleep 300  # Esperar 5 minutos antes de intentar de nuevo
-        continue  # Saltar esta iteración si el dispositivo no está montado
+        echo -e "\e[1m\e[31mDispositivo de respaldo no montado, reintentando...\e[0m"
+        sleep 10
+        continue
     fi
-
+    echo -e "\e[1m\e[33mSubiendo y respaldando datos...\e[0m"
     if [ -f "$origen_raw" ]; then
+        
         scp "$origen_raw" "$destino_raw"
         if [ $? -eq 0 ]; then
-            echo -e "\e[1m\e[32mDatos en bruto subidos correctamente a \e[45m$destino_raw.\e[0m"
+            echo -e "\e[1m\e[32mDatos en bruto subidos correctamente a \e[35m$destino_raw.\e[0m"
             cp "$origen_raw" "$respaldo_raw"
             echo -e "\e[1m\e[32mDatos en bruto respaldados en \e[35m$respaldo_raw.\e[0m"
         else
