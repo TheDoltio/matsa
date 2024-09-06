@@ -1,72 +1,79 @@
 #!/bin/bash
 
-# Colocar aquí la fecha de inicio de la toma de datos en formato YYMMDDhhmm
-fecha = 2409051113
 
-archivo_origen_1="/ruta/al/raw_${fecha}.dat"
-archivo_origen_2="/ruta/al/cuentas_por_minuto_trad_${fecha}.dat"
-archivo_destino_local_1="/home/respaldo/raw_${fecha}.dat"
-archivo_destino_local_2="/home/respaldo/cuentas_por_minuto_trad_${fecha}.dat"
-archivo_remoto_1="escaramujo8@148.222.47.225:/home/escaramujo8/datos_flujo_escaramujo/raw_${fecha}.dat"
-archivo_remoto_2="escaramujo8@148.222.47.225:/home/escaramujo8/datos_flujo_escaramujo/cuentas_por_minuto_trad_${fecha}.dat"
-intervalo=3600  # Tiempo de espera entre cada ejecución (3600 segundos = 1 hora)
+# Paramétros para el manejo, subida y respaldo del archivo.
 
-# Función para manejar la señal de interrupción (Ctrl+C)
+fecha=2409051113 # Colocar aquí la fecha de inicio de la toma de datos en formato YYMMDDhhmm 
+cluster="escaramujo8@148.222.47.225" # Colocar aquí el nombre del clúster destino
+intervalo=3600 # Colocar cada cuántos segundos se respaldarán los archivos
+
+# Rutas de origen, respaldo y destino de los archivos
+
+origen_raw="/home/escaramujo/datosPrueba/raw_${fecha}.dat"
+origen_trad="/home/escaramujo/datosPrueba/cuentas_por_minuto_trad_${fecha}.dat"
+respaldo_raw="/media/escaramujo/ADATA UFD/data/raw_${fecha}.dat"
+respaldo_trad="/media/escaramujo/ADATA UFD/data/cuentas_por_minuto_trad_${fecha}.dat"
+destino_raw="${cluster}:/home/escaramujo8/datos_flujo_escaramujo/raw_${fecha}.dat"
+destino_trad="${cluster}:/home/escaramujo8/datos_flujo_escaramujo/cuentas_por_minuto_trad_${fecha}.dat"
+
+# # # # # # # # # # # #
+#  Zona de no tocar   #
+# # # # # # # # # # # #
+
 trap "detener_script" SIGINT
 
 detener_script() {
-    echo "Deteniendo el script..."
+    echo -e "Deteniendo el script..."
 
-    # Eliminar los archivos originales si existen
-    if [ -f "$archivo_origen_1" ]; then
-        rm "$archivo_origen_1"
-        echo "Archivo original $archivo_origen_1 eliminado."
+    
+    if [ -f "$origen_raw" ]; then
+        rm "$origen_raw"
+        echo -e "\e[33m\e[46mArchivo original \e[47m$origen_raw eliminado.\e[0m"
     else
-        echo "Archivo original $archivo_origen_1 no encontrado o ya eliminado."
+        echo -e "\e[31mArchivo original \e[47m$origen_raw no encontrado o ya eliminado.\e[0m"
     fi
 
-    if [ -f "$archivo_origen_2" ]; then
-        rm "$archivo_origen_2"
-        echo "Archivo original $archivo_origen_2 eliminado."
+    if [ -f "$origen_trad" ]; then
+        rm "$origen_trad"
+        echo -e "\e[33m\e[46mArchivo original \e[47m$origen_trad eliminado.\e[0m"
     else
-        echo "Archivo original $archivo_origen_2 no encontrado o ya eliminado."
+        echo -e "\e[31mArchivo original \e[47m$origen_trad no encontrado o ya eliminado.\e[0m"
     fi
 
     exit 0
 }
 
-# Bucle principal que se ejecuta indefinidamente
+
 while true; do
-    # Manejar el primer archivo
-    if [ -f "$archivo_origen_1" ]; then
-        scp "$archivo_origen_1" "$archivo_remoto_1"
+
+    echo -e "\e[33m\e[44mFecha y hora de ejecución: $(date "+%d-%m-%Y %H:%M:%S")\e[0m"
+
+    if [ -f "$origen_raw" ]; then
+        scp "$origen_raw" "$destino_raw"
         if [ $? -eq 0 ]; then
-            echo "Primer archivo subido correctamente a $archivo_remoto_1."
-            cp "$archivo_origen_1" "$archivo_destino_local_1"
-            echo "Primer archivo copiado a $archivo_destino_local_1."
+            echo -e "\e[32mDatos en bruto subidos correctamente a \e[45m$destino_raw.\e[0m"
+            cp "$origen_raw" "$respaldo_raw"
+            echo -e "\e[32mDatos en bruto respaldados en \e[45m$respaldo_raw.\e[0m"
         else
-            echo "Error al subir el primer archivo al clúster."
+            echo -e "\e[31mError al subir datos en bruto al clúster.\e[0m"
         fi
     else
-        echo "Primer archivo $archivo_origen_1 no encontrado."
+        echo -e "\e[31mDatos en bruto $origen_raw no encontrado.\e[0m"
     fi
 
-    # Manejar el segundo archivo
-    if [ -f "$archivo_origen_2" ]; then
-        scp "$archivo_origen_2" "$archivo_remoto_2"
+    if [ -f "$origen_trad" ]; then
+        scp "$origen_trad" "$destino_trad"
         if [ $? -eq 0 ]; then
-            echo "Segundo archivo subido correctamente a $archivo_remoto_2."
-            cp "$archivo_origen_2" "$archivo_destino_local_2"
-            echo "Segundo archivo copiado a $archivo_destino_local_2."
+            echo -e "\e[32mDatos traducidos subidos correctamente a \e[45m$destino_trad.\e[0m"
+            cp "$origen_trad" "$respaldo_trad"
+            echo -e "\e[32mDatos traducidos respaldados en \e[45m$respaldo_trad.\e[0m"
         else
-            echo "Error al subir el segundo archivo al clúster."
+            echo -e "\e[31mError al subir los datos traducidos al clúster.\e[0m"
         fi
     else
-        echo "Segundo archivo $archivo_origen_2 no encontrado."
+        echo -e "\e[31mSegundo archivo $origen_trad no encontrado.\e[0m"
     fi
 
-    # Esperar antes de la siguiente ejecución
-    echo "Esperando $((intervalo/60)) minutos antes de la próxima ejecución..."
-    sleep $intervalo  # Esperar el intervalo de 1 hora
+    sleep $intervalo 
 done
 
