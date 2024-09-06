@@ -1,0 +1,93 @@
+ ____    ____  ________  _________   ______        _       
+|_   \  /   _||_   __  ||  _   _  |.' ____ \      / \      
+  |   \/   |    | |_ \_||_/ | | \_|| (___ \_|    / _ \     
+  | |\  /| |    |  _| _     | |     _.____`.    / ___ \    
+ _| |_\/_| |_  _| |__/ |   _| |_   | \____) | _/ /   \ \_  
+|_____||_____||________|  |_____|   \______.'|____| |____| 
+                                                           
+Metsa, observar en zoque, tiene como funcionalidad automatizar, monitorear, organizar y respaldar la toma de datos del detector Escaramujo, se divide en 3 scripts para la toma de datos y uno para la graficación de dichos datos facilitando el manejo de los resultados en el flujo reportados por Escaramujo.
+
+# ¿Cómo usar minicom y Escaramujo? #
+Para iniciar una toma de datos en Escaramujo es necesario utilizar el framework de minicom para la comunicación de la tarjeta Raspberry Pi con la tarjeta Quarknet, se inicia la simulación desde la terminal de la Raspberry Pi con el siguiente comando:
+
+sudo minicom -C ruta/del/archivo/tomado/archivo.dat
+
+Se propone como nombre estándar para la toma de datos del archivo: raw_YYMMDDhhmm.dat
+
+Una vez se corre dicho comando entraremos en la consola de minicom, aquí se pueden ingresar instrucciones para la toma de datos, en el caso de escaramujo nos interesan 3:
+
+CE Inicia la toma de datos
+CD Detiene la toma de datos
+V1 Da información útil sobre la configuración del detector como: los canales activados, el tipo de coincidencia, la ventana de captura, el trigger en distintos canales, etc.
+TL ch v Establece el valor del trigger (el valor mínimo del voltaje) para considerar a algo un evento en el detector, ch es el canal que deseamos configurar y v el valor en mV que se establece como trigger.
+ST 3 n Establece cada cuánto tiempo se tomarán generará una cuenta de datos de flujo, es decir, cuántas partículas pasaron el valor del trigger en el tiempo que configuramos, en este caso n es un tiempo en minutos.
+
+Un ejemplo de una toma de datos, asumiendo que la toma de datos está detenida sería:
+
+sudo minicom -C ruta/raw_YYMMDDhhmm.dat
+
+TL 0 20 # Para establecer en el canal 0 un trigger de 20mV
+TL 1 20 # Para establecer en el canal 1 un trigger de 20mV
+V1 # Dejamos un log del detector
+ Run Mode       : Off         CE (cnt enable), CD (cnt disable)
+ Ch(s) Enabled  : 1,0     Cmd DC  Reg C0 using (bits 3-0)
+ Veto Enable    : Off         VE 0 (Off),  VE 1 (On)
+ Veto Select    : Ch0         Cmd DC  Reg C0 using (bits 7,6)
+ Coincidence 1-4: 2-Fold      Cmd DC  Reg C0 using (bits 5,4)
+ Pipe Line Delay:    40 nS    Cmd DT  Reg T1=rDelay  Reg T2=wDelay  10nS/cnt
+ Gate Width     :   100 nS    Cmd DC  Reg C2=LowByte Reg C3=HighByte 10nS/cnt
+ Veto Width     :     0 nS    Cmd VG  (10nS/cnt)
+ Ch0 Threshold  : 0.020 vlts
+ Ch1 Threshold  : 0.020 vlts
+ Ch2 Threshold  : 0.020 vlts
+ Ch3 Threshold  : 0.020 vlts
+ Test Pulser Vlt: 3.000 vlts
+ Test Pulse Ena : Off
+
+ Example line for 1 of 4 channels. (Line Drawing, Not to Scale)
+ Input Pulse edges (begin/end) set rising/falling tags bits.
+ ____~~~~~~_________________________________ Input Pulse, Gate cycle begins
+ __________________~________________________ Delayed Rise Edge 'RE' Tag Bit
+ ________________________~__________________ Delayed Fall Edge 'FE' Tag Bit
+     _____________                           Tag Bits delayed by PipeLnDly
+ ___|             |_________________________ PipeLineDelay :   40nS
+                   _____________________
+ _________________|                     |___ Capture Window:   60nS
+     ___________________________________
+ ___|                                   |___ Gate Width    :  100nS
+
+ If 'RE','FE' are outside Capture Window, data tag bit(s) will be missing.
+ CaptureWindow = GateWidth - PipeLineDelay
+ The default Pipe Line Delay is 40nS, default Gate Width is 100nS.
+ Setup CMD sequence for Pipeline Delay.  CD,  WT 1 0, WT 2 nn (10nS/cnt)
+ Setup CMD sequence for Gate Width.  CD, WC 2 nn(10nS/cnt), WC 3 nn (2.56uS/cnt)
+ST 3 1 # Para que los datos de flujo se generen por minuto
+CE # Inicia la toma de datos
+
+El proceso correcto para una toma de datos será:
+
+1. Asegurarse que todo está conectado correctamente
+2. Correr el comando sudo minicom en la terminal de la Raspberry Pi.
+3. Si hay datos tomándose, detenerlos con CD.
+4. Comprobar el estado del detector con V1.
+5. Colocar cada cuánto tiempo se debe generar una línea de datos de flujo con ST 3 n.
+5. Reiniciar las cuentas de la Quarknet usando el botón en la placa Quarknet, a un costado del display del contador llamado "count reset"
+6. Utilizar CE para iniciar la toma de datos.
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # #
+#  ¿Cómo usar los scripts de apoyo para Escaramujo? #
+# # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+# Metsa #
+El script, escrito en C++, que da nombre al programa toma los datos generados en hexadecimal por minicom y busca periódicamente los datos de flujo para traducirlos y moverlos a otro archivo. Al inicio del código se configuran las variables para la traducción de datos como se ve a continuación:
+
+const string input = "raw_YYMMDDhhmm.dat"; # nombre del archivo de entrada
+const string output = "cuentas_trad_YYMMDDhhmm.dat"; # nombre del archivo de salida
+const int periodo = 10; # Tiempo en minutos de repetición de la traducción de datos.
+
+Se compila desde la terminar como cualquier archivo de C++ usando:
+
+g++ -o metsa metsa.cpp
+
+y al iniciar el ejecutable iniciará también la traducción de datos.
+

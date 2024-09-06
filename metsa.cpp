@@ -9,8 +9,9 @@
 
 using namespace std;
 
-const string input = "master_file200824.dat";
-const string output = "per_min_ctn.dat";
+const string input = "raw_YYMMDDhhmm.dat";
+const string output = "cuentas_trad_YYMMDDhhmm.dat";
+const int periodo = 10;
 
 // Esta función traduce valores de hexadecimal a decimal, así tenemos un archivo de entrega ya procesado.
 int hex_to_dec(string hex) {
@@ -122,50 +123,7 @@ void log(bool success) {
 }
 
 // Esta es la función principal que buscará y traducirá los datos continuamente.      
-/*void proceso_busqueda(const string& input, const string& output) {
 
-    static long long ult_linea = 0;
-    ifstream in(input);
-    ofstream out(output, ios::app);
-    
-    if(!in || !out){
-        cerr << "\033[1m\033[31mLos nombres de los archivos de entrada o salida no son válidos.\033[0m" << "\n";
-        return;
-     }
-     
-     in.seekg(ult_linea, ios::beg);
-     
-     string linea;
-     vector<string> lineas;
-     long long linea_actual = ult_linea;
-     bool datos_leidos = false;
-     
-     while (getline(in, linea)) {
-        linea_actual = in.tellg();
-        lineas.push_back(linea);
-     }
-     
-     for (size_t i = 0; i < lineas.size(); ++i) {
-        if (lineas[i].rfind("DS", 0) == 0) {
-            string datos = flujo(lineas[i]);
-            string fechas;
-            if (i >= 2) {
-                fechas = tiempo(lineas[i - 2]);
-            }
-            if (!fechas.empty()) {
-                out << fechas << " " << datos << "\n";
-                datos_leidos = true;
-            }
-        }
-     } 
-     
-     ult_linea = linea_actual;
-     
-     in.close();
-     out.close();
-     
-     log(datos_leidos); 
-}*/
 void proceso_busqueda(const string& input, const string& output) {
     static long long ult_linea = 0;
     string linea;
@@ -182,7 +140,7 @@ void proceso_busqueda(const string& input, const string& output) {
     in.seekg(ult_linea, ios::beg);
     if (in.fail()) {
         cerr << "\033[1m\033[31mError al mover el puntero de lectura.\033[0m" << "\n";
-        in.clear(); // Restablecer las banderas de error
+        in.clear(); 
         in.close();
         return;
     }
@@ -191,11 +149,11 @@ void proceso_busqueda(const string& input, const string& output) {
         linea_actual = in.tellg();
         if (linea_actual == -1) {
             cerr << "\033[1m\033[31mError al obtener la posición del puntero de lectura.\033[0m" << "\n";
-            break; // Salir del bucle si ocurre un error
+            break; 
         }
         lineas.push_back(linea);
     }
-    in.close(); // Cerrar el archivo después de leer
+    in.close();
 
     ofstream out(output, ios::app);
     if (!out) {
@@ -217,9 +175,8 @@ void proceso_busqueda(const string& input, const string& output) {
         }
     }
 
-    out.close(); // Cerrar el archivo de salida después de escribir
+    out.close(); 
 
-    // Solo actualizar `ult_linea` si no hubo errores
     if (linea_actual != -1) {
         ult_linea = linea_actual;
     }
@@ -234,7 +191,7 @@ int main() {
     while (true) {
         proceso_busqueda(input, output);
         
-        this_thread::sleep_for(chrono::minutes(10));
+        this_thread::sleep_for(chrono::minutes(periodo));
         
     }
     
