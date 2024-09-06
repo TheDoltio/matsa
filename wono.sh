@@ -1,7 +1,6 @@
 #!/bin/bash
 
-
-# Paramétros para el manejo, subida y respaldo del archivo.
+# Parámetros para el manejo, subida y respaldo del archivo.
 
 fecha=2409051113 # Colocar aquí la fecha de inicio de la toma de datos en formato YYMMDDhhmm 
 cluster="escaramujo8@148.222.47.225" # Colocar aquí el nombre del clúster destino
@@ -24,9 +23,19 @@ trap "detener_script" SIGINT
 
 detener_script() {
     echo -e "Deteniendo el script..."
-
     
+    # Respaldo antes de eliminar archivos
     if [ -f "$origen_raw" ]; then
+        echo -e "\e[33mRespaldando datos antes de eliminar...\e[0m"
+        scp "$origen_raw" "$destino_raw"
+        if [ $? -eq 0 ]; then
+            echo -e "\e[32mDatos en bruto subidos correctamente a \e[45m$destino_raw.\e[0m"
+            cp "$origen_raw" "$respaldo_raw"
+            echo -e "\e[32mDatos en bruto respaldados en \e[45m$respaldo_raw.\e[0m"
+        else
+            echo -e "\e[31mError al subir datos en bruto al clúster.\e[0m"
+        fi
+        
         rm "$origen_raw"
         echo -e "\e[33m\e[46mArchivo original \e[47m$origen_raw eliminado.\e[0m"
     else
@@ -34,6 +43,16 @@ detener_script() {
     fi
 
     if [ -f "$origen_trad" ]; then
+        echo -e "\e[33mRespaldando datos antes de eliminar...\e[0m"
+        scp "$origen_trad" "$destino_trad"
+        if [ $? -eq 0 ]; then
+            echo -e "\e[32mDatos traducidos subidos correctamente a \e[45m$destino_trad.\e[0m"
+            cp "$origen_trad" "$respaldo_trad"
+            echo -e "\e[32mDatos traducidos respaldados en \e[45m$respaldo_trad.\e[0m"
+        else
+            echo -e "\e[31mError al subir los datos traducidos al clúster.\e[0m"
+        fi
+        
         rm "$origen_trad"
         echo -e "\e[33m\e[46mArchivo original \e[47m$origen_trad eliminado.\e[0m"
     else
