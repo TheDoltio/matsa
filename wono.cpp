@@ -11,6 +11,7 @@ using namespace std;
 
 string raw;
 string output;
+string pyt;
 int periodo;
 
 // Esta función traduce valores de hexadecimal a decimal, así tenemos un archivo de entrega ya procesado.
@@ -33,7 +34,7 @@ int hex_to_dec(string hex) {
 }
 
 // Esta función toma el tiempo de la medición de flujo (checa si se registró el tiempo, porque realmente a veces genera esos datos pero no da lecturas de tiempo)
-string tiempo (string linea) {
+vector<string> tiempo (string linea) {
     istringstream stream(linea);
     string token, hora, fecha;
     int columna = 0;
@@ -53,7 +54,7 @@ string tiempo (string linea) {
         fecha.insert(2, "-");
         fecha.insert(5, "-20"); // Si de alguna forma este detector llega a vivir más de 100 años, habría que subir a -21.
     } else {
-        return "";
+        return {"",""};
     }
     
     if (hora.length() >= 6) {
@@ -61,10 +62,10 @@ string tiempo (string linea) {
         hora.insert(2, ":");
         hora.insert(5, ":");
     } else {
-        return "";
+        return {"",""};
     }
     
-    return fecha + " " + hora;
+    return {fecha + " " + hora, fecha + " " + hora.erase(5, 3)};
 }
 
 // Ahora, esta línea se encarga de traducir a decimal las incidencias sobre el detector 
@@ -122,9 +123,34 @@ void log(bool success) {
     }
 }
 
+vector<string> buscar_en_pyt(const string& fecha_hora, const string& pyt) {
+   
+   ifstream in(pyt);
+    if (!in) {
+        cerr << "\033[1m\033[31mNo se pudo abrir el archivo pyt.\033[0m" << "\n";
+        return {};
+    }
+
+    string linea;
+
+    while (getline(in, linea)) {
+
+        if (linea.find(fecha_hora) == 0) { // Comprobar si la línea comienza con la fecha y hora
+            istringstream stream(linea);
+            string fecha, hora, temperatura, presion;
+            stream >> fecha >> hora >> temperatura >> presion;
+            return {temperatura, presion}; // Retornar temperatura y presión
+        }
+    }
+
+    return {}; // Retornar vacío si no se encuentra
+
+}
+
 // Esta es la función principal que buscará y traducirá los datos continuamente.      
 
-void proceso_busqueda(const string& raw, const string& output) {
+void proceso_busqueda(const string& raw, const string& output, const string& pyt) {
+
     static long long ult_linea = 0;
     string linea;
     vector<string> lineas;
@@ -132,10 +158,11 @@ void proceso_busqueda(const string& raw, const string& output) {
     bool datos_leidos = false;
 
     ifstream in(raw);
-    if (!in) {
-        cerr << "\033[1m\033[31mNo se pudo abrir el archivo de entrada.\033[0m" << "\n";
-        return;
+      if (!in) {
+      cerr << "\033[1m\033[31mNo se pudo abrir el archivo de entrada.\033[0m" << "\n";
+      return;
     }
+
 
     in.seekg(ult_linea, ios::beg);
     if (in.fail()) {
@@ -145,6 +172,7 @@ void proceso_busqueda(const string& raw, const string& output) {
         return;
     }
 
+
     while (getline(in, linea)) {
         linea_actual = in.tellg();
         if (linea_actual == -1) {
@@ -153,69 +181,82 @@ void proceso_busqueda(const string& raw, const string& output) {
         }
         lineas.push_back(linea);
     }
+
     in.close();
 
     ofstream out(output, ios::app);
+
     if (!out) {
         cerr << "\033[1m\033[31mNo se pudo abrir el archivo de salida.\033[0m" << "\n";
         return;
     }
 
+
     for (size_t i = 0; i < lineas.size(); ++i) {
-        if (lineas[i].rfind("DS", 0) == 0) {
-            string datos = flujo(lineas[i]);
-            string fechas;
-            if (i >= 2) {
-                fechas = tiempo(lineas[i - 2]);
+
+    if (lineas[i].rfind("DS", 0) == 0) {
+
+        string datos = flujo(lineas[i]);
+        vector<string> fechas; // Cambiar a vector<string>
+        
+        if (i >= 2) {
+            fechas = tiempo(lineas[i - 2]); // Ahora fechas es un vector<string>
+            vector<string> atmosfera = buscar_en_pyt(fechas[1], pyt); // Buscar en pyt
+            if (!atmosfera.empty()) {
+                // Verificar que la línea de salida comience con una fecha y hora válidas
+                if (!fechas[0].empty()) {
+                    out << fechas[0] << " " << datos << " " << atmosfera[0] << " " << atmosfera[1] << "\n"; // Agregar temperatura y presión
+                }
+            } else {
+                continue; // Si no hay datos de atmosfera, continuar
             }
-            if (!fechas.empty()) {
-                out << fechas << " " << datos << "\n";
-                datos_leidos = true;
-            }
+            datos_leidos = true;
         }
     }
-
+}
     out.close(); 
-
     if (linea_actual != -1) {
         ult_linea = linea_actual;
     }
-
     log(datos_leidos);
+
 }
 
 int main() {
-    
-    cout << "\033[1m\033[35mIniciando la recolección y traducción de datos de flujo\n";
-    
-ifstream input("temp");
 
-bool file_opened = false;
+    cout << "\033[1m\033[35mIniciando la recolección y traducción de datos de flujo\n";
+
+    ifstream input("temp");
+
+    bool file_opened = false;
+
     while (!file_opened) {
+
         ifstream input("temp");
 
         if (input.is_open()) {
             getline(input, raw);      
             getline(input, output);   
+            getline(input, pyt);
             input >> periodo;         
             input.close();
             file_opened = true;
+
         } else {
+
             cerr << "\033[31mError al extraer datos de temp. Reintentando en 5 segundos...\033[0m" << endl;
             this_thread::sleep_for(chrono::seconds(5));
+
         }
     }
-    
+
     cout << "Traduciendo cada\033[36m " << periodo << "\033[35m minutos\033[0m\n\n";
     
     while (true) {
-        proceso_busqueda(raw, output);
-        
+        proceso_busqueda(raw, output, pyt);
         this_thread::sleep_for(chrono::minutes(periodo));
-        
     }
-    
-    return 0;
 
+    return 0;
 }
 

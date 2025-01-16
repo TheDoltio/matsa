@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Aquí se colocan las rutas de respaldo de los archivos, una ruta a un disco físico y una a un servidor
-ruta_fisica="/media/escaramujo/ADATA UFD/datos"
-ruta_server="/home/escaramujo8/datos_flujo_escaramujo"
+ruta_fisica="/media/escaramujo/ADATA UFD/datos_escaramujo"
+ruta_server="/home/escaramujo8/datos_escaramujo"
 
 cluster="148.222.27.225"
 user_cluster="escaramujo8"
@@ -22,13 +22,17 @@ check_fis="true"
 
 name_raw=""
 name_trad=""
+name_pyt=""
 origen_raw=""
 origen_trad=""
+origen_pyt=""
 
 respaldo_raw=""
 respaldo_trad=""
+respaldo_pyt=""
 destino_raw=""
 destino_trad=""
+destino_pyt=""
 
 origen=$(pwd)
 
@@ -38,13 +42,19 @@ archivos() {
     
     name_raw="raw_${fecha}.dat"
     name_trad="trad_${fecha}.dat"
+    name_pyt="pyt_${fecha}.dat"
     origen_raw="${origen}/${name_raw}"
     origen_trad="${origen}/${name_trad}"
+    origen_pyt="${origen}/${name_pyt}"
+
+    ruta_cluster="${user_cluster}@${cluster}:${ruta_server}"
     
-    respaldo_raw="${ruta_fisica}/${name_raw}"
-    respaldo_trad="${ruta_fisica}/${name_trad}"
-    destino_raw="${ruta_server}/${name_raw}"
-    destino_trad="${ruta_server}/${name_trad}"
+    respaldo_raw="${ruta_fisica}/datos_raw/${name_raw}"
+    respaldo_trad="${ruta_fisica}/datos_trad/${name_trad}"
+    respaldo_pyt="${ruta_fisica}/datos_pyt/${name_pyt}"
+    destino_raw="${ruta_cluster}/datos_raw/${name_raw}"
+    destino_trad="${ruta_cluster}/datos_trad/${name_trad}"
+    destino_pyt="${ruta_cluster}/datos_pyt/${name_trad}"
     
 }
 
@@ -94,6 +104,7 @@ echo -e "\e[0m"
 # Comprobar la existencia y validez del clúster
 
 echo -e "\e[1m\e[33mComprobando conexión con el clúster\e[0m"
+sleep 30
 
 if ! ping -c 1 ${cluster} &> /dev/null; then
 	echo -e "\033[F\e[1m\e[31mNo se puede conectar a ${ruta_server%:*}. \e[0m"
@@ -122,6 +133,7 @@ fi
 # Comprobar que se puede efectuar un respaldo físico
 
 echo -e "\e[1m\e[33mValidando ruta de respaldo local...\e[0m"
+sleep 30 # esto es para asegurarnos de que si la raspberry es muy lenta no haya problemas al iniciar el montado de los archivos
 if ! mountpoint -q "${ruta_fisica%/datos*}"; then
     echo -e "\033[F\e[1m\e[31mNo se encuentra la ruta ${ruta_fisica}. \e[0m"
     
@@ -210,9 +222,16 @@ medicion=$(date +"%s")
 # Creación de los archivos de control
 archivos "$fecha"
 
-echo -e "$name_raw\n$name_trad\n$periodo_trad" > temp
+echo -e "$name_raw\n$name_trad\n$name_pyt\n$periodo_trad" > temp
 
 echo -e "\e[1m\e[33m\nPreparando toma de datos, configure la tarjeta QuarkNet.\e[0m"
+
+echo -e "\e[33m\e[1m\e[5mIniciando toma de datos de presión y temperatura.\e[0m"
+
+lxterminal -e "python3 pyt.py < temp"
+pid_pyt=$(pgrep -f "lxterminal.*python3 pyt.py")
+
+echo -e "\e[1m\e[33m\nConfigure la tarjeta QuarkNet.\e[0m"
 
 sudo sh -c "lxterminal -e 'minicom -C $origen_raw'" &
 
@@ -253,6 +272,12 @@ while true; do
 
     if (( diferencia >= quince_dias )); then
         echo -e "\n\e[1m\e[44m\e[93mHan pasado 15 días desde que inició la medición, iniciando reinicio de seguridad...\e[0m"
+        echo "Cerrando minicom..."
+        sudo kill -9 $pid_minicom
+        echo "Deteniendo traducción de datos..."
+        kill -9 $pid_wono      
+        echo "Deteniendo datos de presión y temperatura..."
+        kill -9 $pid_pyt
         reinicio
         break
     fi
@@ -301,10 +326,17 @@ reinicio() {
     
     archivos "$fecha"
 
-    echo -e "$name_raw\n$name_trad\n$periodo_trad" > temp
+    echo -e "$name_raw\n$name_trad\n$name_pyt\n$periodo_trad" > temp
+    
+    echo -e "\e[1m\e[33m\nPreparando toma de datos, configure la tarjeta QuarkNet.\e[0m"
 
+    echo -e "\e[33m\e[1m\e[5mIniciando toma de datos de presión y temperatura.\e[0m"
+
+    lxterminal -e "python3 pyt.py < temp"
+    pid_pyt=$(pgrep -f "lxterminal.*python3 pyt.py")
+    
     sudo sh -c "lxterminal -e 'minicom -C $origen_raw'" &
-
+    
     echo -e "\e[33m\e[1m\e[5mReiniciando minicom.\e[0m"
     sleep 300
     echo -e "\033[F\e[92m\e[1mMinicom se ha iniciado exitosamente.\e[0m"
@@ -319,6 +351,8 @@ reinicio() {
 
     sleep 1
     pid_wono=$(pgrep -f "./wono")
+
+    rm temp
     
     while true; do
         
@@ -332,6 +366,12 @@ reinicio() {
         
         if (( diferencia >= quince_dias )); then
             echo -e "\n\e[1m\e[44m\e[93mHan pasado 15 días desde que inició la medición, iniciando reinicio de seguridad...\e[0m"
+            echo "Cerrando minicom..."
+            sudo kill -9 $pid_minicom
+            echo "Deteniendo traducción de datos..."
+            kill -9 $pid_wono  
+            echo "Deteniendo datos de presión y temperatura..."
+            kill -9 $pid_pyt
             reinicio
             break
         fi
@@ -342,12 +382,17 @@ reinicio() {
 }
 
 subida() {
+echo -e "\e[1m\e[33m\e[44m\n$(date "+%d-%m-%Y %H:%M:%S") \e[0m"
 
 # Respaldo en el clúster (si está habilitado)
 if [[ "$check_clus" == "true" ]]; then
     respaldo "$origen_raw" "$destino_raw" "scp" \
     "Datos en bruto subidos correctamente a: $destino_raw" \
     "No se pudieron subir los datos en bruto a $destino_raw"
+    
+    respaldo "$origen_pyt" "$destino_pyt" "scp" \
+    "Datos de presion y temperatura subidos correctamente a: $destino_pyt" \
+    "No se pudieron subir los Datos de presion y temperatura a $destino_pyt"
 
     respaldo "$origen_trad" "$destino_trad" "scp" \
     "Datos traducidos subidos correctamente a: $destino_trad" \
@@ -359,6 +404,10 @@ if [[ "$check_fis" == "true" ]]; then
     respaldo "$origen_raw" "$respaldo_raw" "cp" \
     "Datos en bruto respaldados correctamente en: $respaldo_raw" \
     "No se pudieron respaldar los datos en bruto en $respaldo_raw"
+    
+    respaldo "$origen_pyt" "$respaldo_pyt" "cp" \
+    "Datos de presion y temperatura respaldados correctamente en: $respaldo_pyt" \
+    "No se pudieron respaldar los datos de presión y temperatura en $respaldo_pyt"
                     
     respaldo "$origen_trad" "$respaldo_trad" "cp" \
     "Datos traducidos respaldados correctamente en: $respaldo_trad" \
@@ -378,10 +427,13 @@ detener() {
         echo "Deteniendo minicom, traducción y respaldo de datos..."
         
         echo "Cerrando minicom..."
-        kill -9 $pid_minicom
+        sudo kill -9 $pid_minicom
         
         echo "Deteniendo traducción de datos..."
         kill -9 $pid_wono
+        
+        echo "Deteniendo datos de presión y temperatura..."
+        kill -9 $pid_pyt
         
         if [[ $check_respaldo == "true" ]]; then
             echo "Ejecutando función de respaldo final..."
